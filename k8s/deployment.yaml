@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: travel-mcp-server
+  namespace: travel-mcp
+  labels:
+    app: travel-mcp-server
+spec:
+  # Single replica: budget state is in-memory — increase once persistence (Redis/DB) is added
+  replicas: 1
+  selector:
+    matchLabels:
+      app: travel-mcp-server
+  template:
+    metadata:
+      labels:
+        app: travel-mcp-server
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+      containers:
+        - name: travel-mcp-server
+          image: travel-mcp-server:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: travel-mcp-config
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          livenessProbe:
+            tcpSocket:
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+      restartPolicy: Always
