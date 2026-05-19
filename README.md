@@ -2,6 +2,8 @@
 
 An AI-powered travel planner built as a [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server. Connect it to Claude and get a full travel assistant — search flights, hotels, weather, and points of interest, generate day-by-day itineraries, and track your trip budget.
 
+A Next.js web UI is included for exploring the tools directly in a browser without a Claude client.
+
 ## Tools
 
 | Tool | Description |
@@ -25,8 +27,8 @@ An AI-powered travel planner built as a [Model Context Protocol (MCP)](https://m
 
 ### Prerequisites
 
-- Python 3.10+
-- [uv](https://docs.astral.sh/uv/) — `brew install uv`
+- Python 3.10+, [uv](https://docs.astral.sh/uv/) — `brew install uv`
+- Node.js 18+ and pnpm (for the web UI) — `brew install pnpm`
 
 ### Run locally (stdio — for Claude Desktop / Claude Code)
 
@@ -36,6 +38,18 @@ cd travel-mcp-server
 uv sync
 uv run python -m travel_mcp
 ```
+
+### Run with the web UI
+
+```bash
+# Terminal 1 — MCP server in SSE mode
+MCP_TRANSPORT=sse uv run python -m travel_mcp
+
+# Terminal 2 — Next.js UI
+cd ui && pnpm install && pnpm dev
+```
+
+Open **http://localhost:3000** to use the browser playground.
 
 ### Inspect tools interactively
 
@@ -72,6 +86,14 @@ docker compose up
 
 The server listens on `http://localhost:8000` in SSE mode when running via Docker.
 
+The web UI can be pointed at a remote server by setting `MCP_SERVER_URL` before starting it:
+
+```bash
+MCP_SERVER_URL=http://your-server:8000 pnpm --prefix ui dev
+```
+
+## Web UI
+
 ## Kubernetes
 
 ```bash
@@ -90,6 +112,21 @@ kubectl delete -f k8s/
 
 > **Note:** The Deployment runs a single replica because budget state is held in memory. Scale to multiple replicas only after adding external storage (Redis, Postgres, etc.).
 
+## Web UI
+
+A Next.js 16 app in `ui/` that provides a browser-based playground for all 8 tools. It requires the MCP server to be running in SSE mode (`MCP_TRANSPORT=sse`).
+
+```
+ui/
+├── app/
+│   ├── page.tsx              # Tabbed playground (Flights, Hotels, Weather, Places, Itinerary, Budget)
+│   └── api/tools/[tool]/     # Next.js API route — proxies to MCP server REST endpoints
+├── components/               # One component per tool tab + shared UI primitives
+└── lib/mcp.ts                # Thin fetch wrapper for /api/tools/*
+```
+
+The MCP server exposes REST endpoints at `/api/tools/<tool_name>` (POST, JSON body) alongside the standard SSE transport, so the UI does not need to implement the MCP protocol.
+
 ## Environment variables
 
 | Variable | Default | Description |
@@ -97,24 +134,33 @@ kubectl delete -f k8s/
 | `MCP_TRANSPORT` | `stdio` | Transport mode: `stdio` (local) or `sse` (HTTP) |
 | `HOST` | `0.0.0.0` | Bind address (SSE mode only) |
 | `PORT` | `8000` | Port (SSE mode only) |
+| `MCP_SERVER_URL` | `http://localhost:8000` | URL the Next.js UI uses to reach the MCP server |
 
 ## Project structure
 
 ```
-src/travel_mcp/
-├── server.py          # FastMCP instance + tool registrations
-├── tools/             # Business logic (one file per domain)
-│   ├── flights.py
-│   ├── hotels.py
-│   ├── weather.py
-│   ├── poi.py
-│   ├── itinerary.py   # Composes other tools into a full itinerary
-│   └── budget.py      # In-memory budget tracker
-└── mock_data/         # Static fixtures — replace query_* functions to wire real APIs
-    ├── flights.py
-    ├── hotels.py
-    ├── weather.py
-    └── poi.py
+travel-mcp-server/
+├── src/travel_mcp/
+│   ├── server.py          # FastMCP instance, tool registrations, REST API routes
+│   ├── tools/             # Business logic (one file per domain)
+│   │   ├── flights.py
+│   │   ├── hotels.py
+│   │   ├── weather.py
+│   │   ├── poi.py
+│   │   ├── itinerary.py   # Composes other tools into a full itinerary
+│   │   └── budget.py      # In-memory budget tracker
+│   └── mock_data/         # Static fixtures — replace query_* functions to wire real APIs
+│       ├── flights.py
+│       ├── hotels.py
+│       ├── weather.py
+│       └── poi.py
+├── ui/                    # Next.js web UI
+│   ├── app/               # App Router pages and API routes
+│   ├── components/        # Tool tab components
+│   └── lib/mcp.ts         # MCP server fetch client
+├── k8s/                   # Kubernetes manifests
+├── Dockerfile
+└── docker-compose.yml
 ```
 
 ## Swapping in real APIs
